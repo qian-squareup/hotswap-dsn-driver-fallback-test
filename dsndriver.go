@@ -82,16 +82,24 @@ func (d MySQLDriver) OpenConnector(dsn string) (driver.Connector, error) {
 // a real function to hot swap the DSN.
 var swapper func(context.Context, string) string = nopSwapper
 
+var fallbackSwapper func(context.Context, string, bool) string = nopFallbackSwapper
+
 // Determine if we should attempt initiate a hotSwap to fallback after
 // a predetermined amount of time.   This is used in situations where
 // the authentication mechanism changed (i.e. from password to IAM) from the initial
 // 1045 failure but the user prefers to password auth as a mechanism to eventually
 // fallback to password auth from IAM auth.
 var fallback bool
+var performFallback bool
 var fallbackInterval time.Duration
 var fallbackTime time.Time
+var numFailuresBeforeFallback int
+var consecutiveSwaps int
 
 func nopSwapper(_ context.Context, _ string) string {
+	return ""
+}
+func nopFallbackSwapper(_ context.Context, _ string, _ bool) string {
 	return ""
 }
 
@@ -118,11 +126,13 @@ func SetHotswapFunc(f func(ctx context.Context, currentDSN string) (newDSN strin
 }
 
 // --------------------------------------------------------------------------
-func SetHotswapFuncWithFallback(f func(ctx context.Context, currentDSN string) (newDSN string), fallbackInterval time.Duration) {
-	swapper = f
+func SetHotswapFuncWithFallback(f func(ctx context.Context, currentDSN string, fallback bool) (newDSN string), fallbackInterval time.Duration, numFailures int) {
+	fallbackSwapper = f
 	fallback = true
 	fallbackInterval = fallbackInterval
 	fallbackTime = time.Now().Add(fallbackInterval)
+	performFallback = false
+	numFailuresBeforeFallback = numFailures
 }
 
 // --------------------------------------------------------------------------
@@ -250,7 +260,8 @@ func (h *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	// so we don't leak abandoned goroutines.
 	done := make(chan string, 1)
 	go func() {
-		done <- swapper(ctx, h.dsn)
+		done <- fallbackSwapper(ctx, h.dsn, performFallback)
+
 	}()
 
 	// Waiting for the ^ hot swap callback func goroutine, or the context
@@ -285,9 +296,14 @@ func (h *connector) Connect(ctx context.Context) (driver.Conn, error) {
 		debug("mysql.NewConnector error: %s", err)
 		return nil, err
 	}
-	h.myc.Store(mycNew) // hot swap the mysql.Connector with the new DSN
-	h.dsn = newDSN      // store new DSN (don't need to guard)
-
+	h.myc.Store(mycNew)     // hot swap the mysql.Connector with the new DSN
+	h.dsn = newDSN          // store new DSN (don't need to guard)
+	performFallback = false // reset fallback flag
+	if numFailuresBeforeFallback >= consecutiveSwaps {
+		performFallback = true
+		numFailuresBeforeFallback = 0
+	}
+	numFailuresBeforeFallback += 1
 	// Update the fallback time on successful swaps of dsn
 	fallbackTime = time.Now().Add(fallbackInterval)
 	// Reconnect. DO NOT recurse (h.Connect(ctx)) because we lock and clean up
