@@ -168,6 +168,7 @@ func (h *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	// a driver.Conn and we return early--no locking in this pkg.
 	myc := h.myc.Load().(driver.Connector)
 	conn, myerr := myc.Connect(ctx)
+	debug("error from connector: %v", myerr)
 	if myerr == nil {
 		return conn, nil // conn OK
 	}
