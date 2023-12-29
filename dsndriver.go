@@ -3,16 +3,16 @@
 // replacement for the real Go MySQL driver: github.com/go-sql-driver/mysql.
 // To use this driver:
 //
-//   import dsndriver "github.com/go-mysql/hotswap-dsn-driver"
+//	import dsndriver "github.com/go-mysql/hotswap-dsn-driver"
 //
-//   // Set hot swap callback function only once, at start
-//   dsndriver.SetHotswapFunc(func(ctx context.Context, currentDSN string) (newDSN string) {
-//       // User-provided code to load and return new DSN
-//       // if it has changed, else return an empty string.
-//       return "user:new-pass@tcp(127.0.0.1)/"
-//   })
+//	// Set hot swap callback function only once, at start
+//	dsndriver.SetHotswapFunc(func(ctx context.Context, currentDSN string) (newDSN string) {
+//	    // User-provided code to load and return new DSN
+//	    // if it has changed, else return an empty string.
+//	    return "user:new-pass@tcp(127.0.0.1)/"
+//	})
 //
-//   db, err := sql.Open("mysql-hotswap-dsn", "user:pass@tcp(127.0.0.1)/")
+//	db, err := sql.Open("mysql-hotswap-dsn", "user:pass@tcp(127.0.0.1)/")
 //
 // Then use the db as normal. This driver only implement connection-related
 // interface, and it only hot swaps the DSN by calling the hot sap function
@@ -45,7 +45,7 @@ import (
 )
 
 // Debug prints debug info using the Go log package, if true.
-var Debug bool = false
+var Debug bool = true
 
 // MySQLDriver implements driver.Driver and driver.DriverContext.
 type MySQLDriver struct{}
