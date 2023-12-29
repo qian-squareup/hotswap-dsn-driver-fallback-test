@@ -254,14 +254,16 @@ func (h *connector) Connect(ctx context.Context) (driver.Conn, error) {
 		debug("mysql.ParseDSN error: %s", err)
 		return nil, err
 	}
+	debug("new cfg: %v", cfg)
 	mycNew, err := newConnector(cfg)
 	if err != nil {
 		debug("mysql.NewConnector error: %s", err)
 		return nil, err
 	}
+
 	h.myc.Store(mycNew) // hot swap the mysql.Connector with the new DSN
 	h.dsn = newDSN      // store new DSN (don't need to guard)
-
+	debug("new connector", mycNew)
 	// Reconnect. DO NOT recurse (h.Connect(ctx)) because we lock and clean up
 	// in the defer func ^, so if we recurse we'll dead lock on our self.
 	return mycNew.Connect(ctx)
