@@ -53,13 +53,16 @@ type MySQLDriver struct{}
 func (d MySQLDriver) Open(dsn string) (driver.Conn, error) {
 	cfg, err := mysql.ParseDSN(dsn)
 	if err != nil {
+		debug("error from parsedsn: %v", err)
 		return nil, err
 	}
 	myc, err := newConnector(cfg)
 	if err != nil {
+		debug("error from myc: %v", err)
 		return nil, err
 	}
 	c := NewConnector(dsn, myc)
+	debug("return from new connector: %v", c)
 	return c.Connect(context.Background())
 }
 
@@ -170,12 +173,14 @@ func (h *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	conn, myerr := myc.Connect(ctx)
 	debug("error from connector: %v", myerr)
 	if myerr == nil {
+		debug("return from no error")
 		return conn, nil // conn OK
 	}
 
 	// Connection failed. Return early if the error is not the only one we care
 	// about: MySQL error code 1045 (access denied).
 	if val, ok := myerr.(*mysql.MySQLError); !ok || val.Number != 1045 {
+		debug("return from non-1045 error")
 		return nil, myerr // conn fail but not "access denied"
 	}
 
@@ -194,9 +199,11 @@ func (h *connector) Connect(ctx context.Context) (driver.Conn, error) {
 		select {
 		case <-h.ready:
 			// got new conn in time, retry conn
+			debug("return from swapping ready")
 			return h.Connect(ctx)
 		case <-ctx.Done():
 		}
+		debug("return from swapping nil")
 		return nil, ctx.Err()
 	}
 
@@ -244,6 +251,7 @@ func (h *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	// we'll probably keep hitting this code over and over until the hot swap func
 	// returns a DSN that works.
 	if newDSN == "" {
+		debug("no new DSN, returning original")
 		return nil, myerr
 	}
 
